@@ -164,123 +164,114 @@ override the frontend's behavior for this specific character.
 
 ---
 
-## 6. Card Image Tool — Bootstrap & Usage
+## 6. Card Image Tool — Setup & Usage
 
-The skill bundles a Python tool for TavernCard image operations. It is
-self-contained and requires only Python 3 + Pillow.
+The tool source lives in **§7** of this file. It is self-contained and
+requires only Python 3 + Pillow. Works on **macOS, Linux (including cloud),
+and Windows** — no local path assumptions.
 
 **Supported image input formats** (detected by magic bytes, not filename):
 
 | Format | Card data location | Notes |
 |---|---|---|
-| PNG | `tEXt` chunk — key `chara` / `chara_card_v2` / `ai_chara` | Standard TavernCard format |
+| PNG  | `tEXt` chunk — key `chara` / `chara_card_v2` / `ai_chara` | Standard TavernCard format |
 | JPEG | EXIF `UserComment` tag (0x9286) | Pillow + raw APP1/TIFF parser |
 | WebP | EXIF `UserComment` tag (0x9286) | Mirrors KoboldAI Lite reference |
 
-**Output images are always PNG** — the standard TavernCard container.
-Artwork for `--bg` / `--image` accepts PNG, JPEG, or WebP.
+**Output images are always PNG.** Artwork (`--bg` / `--image`) accepts PNG, JPEG, or WebP.
 
-### Step 1 — Locate or create the tool
+---
 
-**Preferred path (local Claude Code):** The tool ships inside the skill
-folder. When this skill loads you receive:
-> `Base directory for this skill: <SKILL_BASE_DIR>`
+### Step 1 — Bootstrap the tool (once per session)
 
-Check for the tool there first:
+Run the following Python snippet. It resolves a writable temp path that works
+on **all platforms and environments** (Claude.ai cloud, local macOS, Linux,
+Windows):
 
 ```python
-# Run this to get the tool path — replace <SKILL_BASE_DIR> with the actual value
-import os
-candidates = [
-    "<SKILL_BASE_DIR>/taverncard_tool.py",          # skill's own folder (local)
-    os.path.expanduser("~/.claude/skills/taverncard/taverncard_tool.py"),  # cached copy
-]
-for p in candidates:
-    if os.path.exists(p):
-        print("FOUND:", p)
-        break
+import os, sys, tempfile
+
+# OS-independent writable location
+TOOL = os.path.join(tempfile.gettempdir(), "taverncard_tool.py")
+
+if os.path.exists(TOOL):
+    print("Tool ready:", TOOL)
 else:
-    print("MISSING — write from §7")
+    print("MISSING — writing tool from §7 source...")
+    # Claude: write the complete Python source block from §7 verbatim to TOOL
 ```
 
-**If NOT FOUND** (e.g. running on Claude.ai or in a fresh environment):
-write the full source from §7 to a writable path such as
-`~/.claude/skills/taverncard/taverncard_tool.py` (create the directory if
-needed), then install Pillow:
+If the tool is **MISSING**: write the full source from **§7** to the `TOOL`
+path printed above (e.g. `/tmp/taverncard_tool.py` on Linux/macOS,
+`C:\Users\...\AppData\Local\Temp\taverncard_tool.py` on Windows).
 
+Then ensure Pillow is installed:
 ```bash
-mkdir -p ~/.claude/skills/taverncard
 pip install Pillow -q
 ```
 
-Verify Pillow is available:
-```
-python3 -c "import PIL; print('Pillow OK')"
+Confirm everything is ready:
+```python
+import os, tempfile
+TOOL = os.path.join(tempfile.gettempdir(), "taverncard_tool.py")
+print("Tool exists:", os.path.exists(TOOL))
+import PIL; print("Pillow OK:", PIL.__version__)
 ```
 
-### Step 2 — Set TOOL and run commands
+---
 
-Set `TOOL` to whichever path was found in Step 1, then run commands.
-Use `python3` (macOS / Linux) or `python` (Windows PowerShell).
+### Step 2 — Run commands
+
+Use `python3` (Linux / macOS / Claude.ai) or `python` (Windows).
+`TOOL` is the path printed in Step 1.
 
 ```bash
-# macOS / Linux
-TOOL="<path-from-step-1>"
+# Linux / macOS / Claude.ai cloud
+TOOL="$(python3 -c 'import tempfile,os; print(os.path.join(tempfile.gettempdir(),"taverncard_tool.py"))')"
 
 # Windows PowerShell
-$TOOL = "<path-from-step-1>"
+$TOOL = python -c "import tempfile,os; print(os.path.join(tempfile.gettempdir(),'taverncard_tool.py'))"
 ```
 
 ```bash
-# Inspect any image (PNG, JPEG, WebP) or JSON — reports actual detected format
-python3 $TOOL info <input.png|input.jpg|input.webp|input.json>
+# Inspect any image (PNG, JPEG, WebP) or JSON — reports the actual detected format
+python3 $TOOL info <card.png>
+python3 $TOOL info <card.jpg>
 
-# Extract card JSON from any image (PNG, JPEG, or WebP)
-python3 $TOOL extract <input.png> -o <output.json>
-python3 $TOOL extract <card.jpg>  -o <output.json>
+# Extract card JSON from any image
+python3 $TOOL extract <card.png> -o card.json
+python3 $TOOL extract <card.jpg> -o card.json
 
-# Extract and convert to V2
-python3 $TOOL extract <input.png> -o <output.json> --target v2
+# Extract and convert to V2 / V1
+python3 $TOOL extract <card.png> -o card.json --target v2
+python3 $TOOL extract <card.png> -o card.json --target v1
 
-# Extract and convert to V1
-python3 $TOOL extract <input.png> -o <output.json> --target v1
-
-# Embed JSON into PNG (artwork may be PNG, JPEG, or WebP)
-python3 $TOOL embed <card.json> -o <output.png> --bg <artwork.jpg>
-
-# Embed JSON into PNG (placeholder image)
-python3 $TOOL embed <card.json> -o <output.png>
+# Embed JSON into a new PNG (artwork: PNG, JPEG, or WebP)
+python3 $TOOL embed card.json -o out.png --bg art.jpg
+python3 $TOOL embed card.json -o out.png                    # placeholder art
 
 # Force V2 wrapper when embedding V1 JSON
-python3 $TOOL embed <card.json> -o <output.png> --bg <art.png> --wrap v2
+python3 $TOOL embed card.json -o out.png --bg art.png --wrap v2
 
-# Swap artwork, preserve card data (card source may be PNG, JPEG, or WebP)
-python3 $TOOL swap-image --card <card.png>  --image <new_art.jpg> -o <output.png>
-python3 $TOOL swap-image --card <card.jpg>  --image <new_art.png> -o <output.png>
-# Legacy flags also work:
-python3 $TOOL swap-image --card-png <card.png> --image-png <new_art.png> -o <output.png>
+# Swap artwork, preserve card JSON (card may be PNG, JPEG, or WebP)
+python3 $TOOL swap-image --card card.png  --image new_art.jpg -o out.png
+python3 $TOOL swap-image --card card.jpg  --image new_art.png -o out.png
+# Legacy flag names also accepted:
+python3 $TOOL swap-image --card-png card.png --image-png new_art.png -o out.png
 
-# Convert V1 JSON → V2 JSON
-python3 $TOOL convert <input.json> -o <output.json> --to v2
-
-# Convert V2 image (any format) → V1 JSON
-python3 $TOOL convert <input.png>  -o <output.json> --to v1
-python3 $TOOL convert <input.jpg>  -o <output.json> --to v1
-
-# Convert V1 JSON → V2 PNG (artwork may be JPEG or WebP)
-python3 $TOOL convert <input.json> -o <output.png> --to v2 --format png --bg <art.jpg>
+# Convert between V1 / V2 — input may be image or JSON
+python3 $TOOL convert card.json -o card_v2.json --to v2
+python3 $TOOL convert card.png  -o card_v1.json --to v1
+python3 $TOOL convert card.jpg  -o card_v1.json --to v1
+python3 $TOOL convert card.json -o card_v2.png  --to v2 --format png --bg art.jpg
 ```
-
-Full flag reference: `references/tool_cli.md`
 
 ---
 
 ## 7. Tool Source (Bootstrap)
 
-The tool normally ships inside the skill folder and **does not need to be
-recreated**. If it is somehow missing, write this source verbatim to
-`<SKILL_BASE_DIR>/taverncard_tool.py` (the skill's own base directory — see
-§6), then run `pip install Pillow -q`.
+**Write this entire source block verbatim** to the `TOOL` path from Step 1
+(e.g. `/tmp/taverncard_tool.py`), then run `pip install Pillow -q`.
 
 ```python
 #!/usr/bin/env python3
