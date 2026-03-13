@@ -9,19 +9,25 @@ Supported input image formats (detected by MAGIC BYTES, not file extension):
   • JPEG — card JSON in EXIF UserComment (tag 0x9286)
   • WebP — card JSON in EXIF UserComment (tag 0x9286), mirrors KoboldAI Lite logic
 
-A file named .png that is actually JPEG or WebP is handled correctly.
+ANY file extension is accepted — the format is determined solely from the first
+bytes of the file content.  This means a card renamed to .txt, .dat, or any
+other extension is processed correctly.
+
+Claude.ai workaround: Claude.ai strips metadata from image files on upload.
+Rename the card to .txt before uploading (e.g. card.png → card.txt) to
+preserve the embedded data, then pass the .txt file to this tool normally.
 
 Commands: info, extract, embed, swap-image, convert
 
 Examples
 --------
-# 1) Inspect any card image (PNG / JPEG / WebP) or JSON
+# 1) Inspect any card image (PNG / JPEG / WebP) or JSON — any file extension
 python taverncard_tool.py info <card>.png
-python taverncard_tool.py info <card>.jpg
+python taverncard_tool.py info <card>.txt   # renamed card, still works
 
-# 2) Extract JSON from any card image
+# 2) Extract JSON from any card image — any file extension
 python taverncard_tool.py extract <card>.png -o card.json
-python taverncard_tool.py extract <card>.jpg -o card.json
+python taverncard_tool.py extract <card>.txt -o card.json   # .txt rename workaround
 
 # 3) Embed JSON into a PNG (with artwork — accepts PNG, JPEG, or WebP art)
 python taverncard_tool.py embed card.json -o card_v2.png --bg cover.jpg --size 512x512 --wrap v2
@@ -38,6 +44,7 @@ python taverncard_tool.py convert card.jpg -o card_v1.png --to v1 --format png
 Use -? or --help for full help.
 """
 import argparse, sys, os, platform, json, base64, re, struct
+from io import BytesIO
 from typing import Optional, Tuple, Dict, Any, List
 from PIL import Image, ImageDraw, ImageFont, PngImagePlugin
 
@@ -49,6 +56,28 @@ WEBP_RIFF = b'RIFF'
 WEBP_WEBP = b'WEBP'
 
 # ─── Utilities ────────────────────────────────────────────────────────────────
+
+def _open_image(path: str) -> Image.Image:
+    """Open an image file using content-based format detection, ignoring extension.
+
+    Reads the file into memory and opens via BytesIO so Pillow never sees the
+    filename.  This ensures a card renamed to .txt, .dat, or any other extension
+    is opened correctly — format is determined entirely from the magic bytes.
+    The BytesIO reference is kept alive by Pillow internally (stored as img.fp).
+    """
+    try:
+        with open(path, "rb") as fh:
+            data = fh.read()
+    except OSError as e:
+        raise ValueError(f"Cannot read '{path}': {e}") from e
+    try:
+        return Image.open(BytesIO(data))
+    except Exception as e:
+        raise ValueError(
+            f"Cannot open '{path}' as an image: {e}\n"
+            f"  Detected type by magic bytes: {detect_image_type(path)}"
+        ) from e
+
 
 def _find_font(size: int = 24) -> ImageFont.FreeTypeFont:
     """Return a TrueType font at *size* pt, searching common system paths."""
@@ -217,9 +246,11 @@ def extract_card_from_png(
     if keys is None:
         keys = ["chara", "chara_card_v2", "ai_chara"]
     try:
-        img = Image.open(path)
+        img = _open_image(path)
+    except ValueError:
+        raise
     except Exception as e:
-        raise ValueError(f"Cannot open PNG '{path}': {e}") from e
+        raise ValueError(f"Cannot open '{path}' as PNG: {e}") from e
     texts = extract_text_chunks(img)
     for key in keys:
         if key in texts:
@@ -247,10 +278,13 @@ def build_png_with_card(
     size: str = "512x512",
     title: Optional[str] = None,
 ) -> None:
-    """Embed *json_obj* into a PNG file.  *bg_path* accepts PNG, JPEG, or WebP."""
+    """Embed *json_obj* into a PNG file.  *bg_path* accepts any image file
+    (PNG, JPEG, or WebP) regardless of file extension."""
     if bg_path:
         try:
-            base = Image.open(bg_path).convert("RGBA")
+            base = _open_image(bg_path).convert("RGBA")
+        except ValueError:
+            raise
         except Exception as e:
             raise ValueError(
                 f"Cannot open background image '{bg_path}': {e}\n"
@@ -579,7 +613,7 @@ def extract_card_from_exif(
 
     # ── Method 1: Pillow EXIF API ─────────────────────────────────────────────
     try:
-        img = Image.open(path)
+        img = _open_image(path)
         text = _read_exif_usercomment_pillow(img)
     except Exception:
         pass
