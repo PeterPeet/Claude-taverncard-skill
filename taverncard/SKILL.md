@@ -162,26 +162,34 @@ override the frontend's behavior for this specific character.
 The skill bundles a Python tool for PNG operations. It is self-contained and
 requires only Python 3 + Pillow.
 
+### Platform notes
+
+| OS | Python command | Set TOOL variable |
+|---|---|---|
+| macOS / Linux | `python3` | `TOOL=~/.claude/skills/taverncard/taverncard_tool.py` |
+| Windows (PowerShell) | `python` | `$TOOL = "$HOME\.claude\skills\taverncard\taverncard_tool.py"` |
+
 ### Step 1 — Locate or bootstrap the tool
 
-The tool should be at: `~/.claude/skills/taverncard/taverncard_tool.py`
+The tool is at: `~/.claude/skills/taverncard/taverncard_tool.py`
 
-Before any PNG operation, verify it exists:
-```bash
-ls ~/.claude/skills/taverncard/taverncard_tool.py
+Check it exists (cross-platform):
+```
+python3 -c "import os; p=os.path.expanduser('~/.claude/skills/taverncard/taverncard_tool.py'); print('OK' if os.path.exists(p) else 'MISSING')"
 ```
 
-If the file is **missing**, write it from the source in §7, then install Pillow:
-```bash
+If **MISSING**, write it from the source in §7, then install Pillow:
+```
 pip install Pillow -q
 ```
 
 ### Step 2 — Run commands
 
-Always use the full path to the skill tool:
-```bash
-TOOL=~/.claude/skills/taverncard/taverncard_tool.py
+Set `TOOL` (see Platform notes above), then use `python3` (macOS/Linux) or
+`python` (Windows). The variable syntax `$TOOL` works in both bash and
+PowerShell once the variable is set.
 
+```bash
 # Inspect a PNG or JSON (no extraction)
 python3 $TOOL info <input.png|input.json>
 
@@ -232,13 +240,44 @@ taverncard_tool.py — PNG/JSON helper for TavernCards (V1 & V2)
 Bundled with the taverncard Claude skill. Requires: pip install Pillow
 Commands: info, extract, embed, swap-image, convert
 """
-import argparse, sys, json, base64, re
+import argparse, sys, os, platform, json, base64, re
 from typing import Optional, Tuple, Dict, Any, List
 from PIL import Image, ImageDraw, ImageFont, PngImagePlugin
 
 PNG_SIG = bytes([0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A])  # \x89PNG\r\n\x1a\n
 
 # --------------- Utilities ---------------
+
+def _find_font(size: int = 24) -> ImageFont.FreeTypeFont:
+    """Return a TrueType font at *size* pt, searching common paths across OSes."""
+    system = platform.system()
+    if system == "Darwin":
+        candidates = [
+            "/System/Library/Fonts/Helvetica.ttc",
+            "/System/Library/Fonts/Supplemental/Arial.ttf",
+            "/Library/Fonts/Arial.ttf",
+        ]
+    elif system == "Windows":
+        windir = os.environ.get("WINDIR", r"C:\Windows")
+        candidates = [
+            os.path.join(windir, "Fonts", "arial.ttf"),
+            os.path.join(windir, "Fonts", "calibri.ttf"),
+            os.path.join(windir, "Fonts", "segoeui.ttf"),
+        ]
+    else:  # Linux: Ubuntu, Arch, Fedora and others
+        candidates = [
+            "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf",        # Ubuntu/Debian
+            "/usr/share/fonts/TTF/DejaVuSans-Bold.ttf",                    # Arch
+            "/usr/share/fonts/dejavu-sans-fonts/DejaVuSans-Bold.ttf",      # Fedora
+            "/usr/share/fonts/dejavu/DejaVuSans-Bold.ttf",                 # Fedora (alt)
+            "/usr/share/fonts/truetype/liberation/LiberationSans-Bold.ttf", # Ubuntu alt
+        ]
+    for path in candidates:
+        try:
+            return ImageFont.truetype(path, size)
+        except Exception:
+            pass
+    return ImageFont.load_default()
 
 def is_png(path: str) -> bool:
     try:
@@ -326,7 +365,10 @@ def extract_text_chunks(img: Image.Image) -> Dict[str, str]:
 def extract_card_from_png(path: str, keys: Optional[List[str]] = None) -> Tuple[Optional[Dict[str, Any]], Dict[str, str], Optional[str]]:
     if keys is None:
         keys = ["chara", "chara_card_v2", "ai_chara"]
-    img = Image.open(path)
+    try:
+        img = Image.open(path)
+    except Exception as e:
+        raise ValueError(f"Cannot open PNG '{path}': {e}") from e
     texts = extract_text_chunks(img)
     for key in keys:
         if key in texts:
@@ -350,16 +392,16 @@ def build_png_with_card(out_path: str, json_obj: Dict[str, Any], key: str = "cha
     m = re.match(r"(\d+)x(\d+)", size)
     W, H = (int(m.group(1)), int(m.group(2))) if m else (512, 512)
     if bg_path:
-        base_img = Image.open(bg_path).convert("RGBA")
+        try:
+            base_img = Image.open(bg_path).convert("RGBA")
+        except Exception as e:
+            raise ValueError(f"Cannot open background image '{bg_path}': {e}") from e
         img = Image.new("RGBA", (W, H), (26, 26, 32, 255))
         img.paste(base_img.resize((W, H), Image.LANCZOS), (0, 0))
     else:
         img = Image.new("RGBA", (W, H), (26, 26, 32, 255))
         draw = ImageDraw.Draw(img)
-        try:
-            font = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf", 24)
-        except Exception:
-            font = ImageFont.load_default()
+        font = _find_font(24)
         text = title or json_obj.get("data", {}).get("name") or json_obj.get("name", "Character")
         bbox = draw.textbbox((0, 0), text, font=font)
         tw, th = bbox[2] - bbox[0], bbox[3] - bbox[1]
@@ -380,7 +422,10 @@ def build_png_with_card(out_path: str, json_obj: Dict[str, Any], key: str = "cha
 
 def cmd_info(args):
     if is_png(args.input):
-        card, chunks, key = extract_card_from_png(args.input)
+        try:
+            card, chunks, key = extract_card_from_png(args.input)
+        except Exception as e:
+            print(f"[ERROR] Could not read PNG: {e}", file=sys.stderr); sys.exit(1)
         print(f"[INFO] File: {args.input}\n  Type: PNG\n  Text keys: {list(chunks.keys())}")
         print(f"  Card detected under: {key!r}" if key else "  Card detected under: None")
         if card:
@@ -412,7 +457,13 @@ def cmd_extract(args):
     print(f"[OK] Extracted card → {args.out} (from key {key})")
 
 def cmd_embed(args):
-    card = extract_card_from_png(args.input)[0] if is_png(args.input) else load_json(args.input)
+    if is_png(args.input):
+        card = extract_card_from_png(args.input)[0]
+    else:
+        try:
+            card = load_json(args.input)
+        except Exception as e:
+            print(f"[ERROR] Cannot read JSON '{args.input}': {e}", file=sys.stderr); sys.exit(1)
     if card is None:
         print("[ERROR] PNG input has no Tavern card JSON.", file=sys.stderr); sys.exit(2)
     kind = detect_card_obj(card)
@@ -436,7 +487,13 @@ def cmd_swap_image(args):
     print(f"[OK] Swapped image, preserved JSON → {args.out}")
 
 def cmd_convert(args):
-    card = extract_card_from_png(args.input)[0] if is_png(args.input) else load_json(args.input)
+    if is_png(args.input):
+        card = extract_card_from_png(args.input)[0]
+    else:
+        try:
+            card = load_json(args.input)
+        except Exception as e:
+            print(f"[ERROR] Cannot read JSON '{args.input}': {e}", file=sys.stderr); sys.exit(1)
     if card is None:
         print("[ERROR] PNG input has no Tavern card JSON.", file=sys.stderr); sys.exit(2)
     kind = detect_card_obj(card)

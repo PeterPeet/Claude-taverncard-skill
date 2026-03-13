@@ -66,7 +66,7 @@
     {
       "id": 5,
       "name": "PNG workflow guidance",
-      "prompt": "A user has a TavernCard PNG file at /home/user/cards/my_character.png and wants to: 1) inspect it, 2) extract the JSON, 3) edit the JSON, then 4) re-embed it into a new PNG using new artwork at /home/user/art/new_art.png. Give them the exact sequence of commands to do this using the bundled taverncard_tool.py.",
+      "prompt": "A user has a TavernCard PNG file at ~/cards/my_character.png and wants to: 1) inspect it, 2) extract the JSON, 3) edit the JSON, then 4) re-embed it into a new PNG using new artwork at ~/art/new_art.png. Give them the exact sequence of commands to do this using the bundled taverncard_tool.py.",
       "expected_output": "Provides a clear 4-step sequence using the correct taverncard_tool.py commands: info, extract with -o flag, (edit step noted), then embed with --bg flag. Uses ~/.claude/skills/taverncard/taverncard_tool.py as the tool path.",
       "files": [],
       "expectations": [

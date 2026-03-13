@@ -26,13 +26,44 @@ python taverncard_tool.py convert card.png -o card_v1.png --to v1 --format png -
 
 Use -? or --help for full help.
 """
-import argparse, sys, os, json, base64, re
+import argparse, sys, os, platform, json, base64, re
 from typing import Optional, Tuple, Dict, Any, List
 from PIL import Image, ImageDraw, ImageFont, PngImagePlugin
 
 PNG_SIG = bytes([0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A])  # \x89PNG\r\n\x1a\n
 
 # --------------- Utilities ---------------
+
+def _find_font(size: int = 24) -> ImageFont.FreeTypeFont:
+    """Return a TrueType font at *size* pt, searching common paths across OSes."""
+    system = platform.system()
+    if system == "Darwin":
+        candidates = [
+            "/System/Library/Fonts/Helvetica.ttc",
+            "/System/Library/Fonts/Supplemental/Arial.ttf",
+            "/Library/Fonts/Arial.ttf",
+        ]
+    elif system == "Windows":
+        windir = os.environ.get("WINDIR", r"C:\Windows")
+        candidates = [
+            os.path.join(windir, "Fonts", "arial.ttf"),
+            os.path.join(windir, "Fonts", "calibri.ttf"),
+            os.path.join(windir, "Fonts", "segoeui.ttf"),
+        ]
+    else:  # Linux: Ubuntu, Arch, Fedora and others
+        candidates = [
+            "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf",        # Ubuntu/Debian
+            "/usr/share/fonts/TTF/DejaVuSans-Bold.ttf",                    # Arch
+            "/usr/share/fonts/dejavu-sans-fonts/DejaVuSans-Bold.ttf",      # Fedora
+            "/usr/share/fonts/dejavu/DejaVuSans-Bold.ttf",                 # Fedora (alt)
+            "/usr/share/fonts/truetype/liberation/LiberationSans-Bold.ttf", # Ubuntu alt
+        ]
+    for path in candidates:
+        try:
+            return ImageFont.truetype(path, size)
+        except Exception:
+            pass
+    return ImageFont.load_default()
 
 def is_png(path: str) -> bool:
     try:
@@ -121,7 +152,10 @@ def extract_text_chunks(img: Image.Image) -> Dict[str, str]:
 def extract_card_from_png(path: str, keys: Optional[List[str]] = None) -> Tuple[Optional[Dict[str, Any]], Dict[str, str], Optional[str]]:
     if keys is None:
         keys = ["chara", "chara_card_v2", "ai_chara"]
-    img = Image.open(path)
+    try:
+        img = Image.open(path)
+    except Exception as e:
+        raise ValueError(f"Cannot open PNG '{path}': {e}") from e
     texts = extract_text_chunks(img)
     for key in keys:
         if key in texts:
@@ -148,7 +182,10 @@ def build_png_with_card(out_path: str,
                         size: str = "512x512",
                         title: Optional[str] = None) -> None:
     if bg_path:
-        base = Image.open(bg_path).convert("RGBA")
+        try:
+            base = Image.open(bg_path).convert("RGBA")
+        except Exception as e:
+            raise ValueError(f"Cannot open background image '{bg_path}': {e}") from e
         m = re.match(r"(\\d+)x(\\d+)", size)
         if m:
             W, H = int(m.group(1)), int(m.group(2))
@@ -165,10 +202,7 @@ def build_png_with_card(out_path: str,
             W, H = 512, 512
         img = Image.new("RGBA", (W, H), (26,26,32,255))
         draw = ImageDraw.Draw(img)
-        try:
-            font = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf", 24)
-        except Exception:
-            font = ImageFont.load_default()
+        font = _find_font(24)
         text = title or json_obj.get("data", {}).get("name") or json_obj.get("name", "Character")
         bbox = draw.textbbox((0, 0), text, font=font)
         tw, th = bbox[2] - bbox[0], bbox[3] - bbox[1]
@@ -195,7 +229,11 @@ def build_png_with_card(out_path: str,
 
 def cmd_info(args):
     if is_png(args.input):
-        card, chunks, key = extract_card_from_png(args.input)
+        try:
+            card, chunks, key = extract_card_from_png(args.input)
+        except Exception as e:
+            print(f"[ERROR] Could not read PNG: {e}", file=sys.stderr)
+            sys.exit(1)
         print(f"[INFO] File: {args.input}")
         print(f"  Type: PNG")
         print(f"  Text keys: {list(chunks.keys())}")
@@ -242,7 +280,11 @@ def cmd_embed(args):
             print("[ERROR] PNG input has no Tavern card JSON; provide a JSON file or use 'swap-image'.", file=sys.stderr)
             sys.exit(2)
     else:
-        card = load_json(args.input)
+        try:
+            card = load_json(args.input)
+        except Exception as e:
+            print(f"[ERROR] Cannot read JSON '{args.input}': {e}", file=sys.stderr)
+            sys.exit(1)
 
     kind = detect_card_obj(card)
     if args.wrap == "v2" and kind == "V1":
@@ -276,7 +318,11 @@ def cmd_convert(args):
             print("[ERROR] PNG input has no Tavern card JSON.", file=sys.stderr)
             sys.exit(2)
     else:
-        card = load_json(args.input)
+        try:
+            card = load_json(args.input)
+        except Exception as e:
+            print(f"[ERROR] Cannot read JSON '{args.input}': {e}", file=sys.stderr)
+            sys.exit(1)
 
     kind = detect_card_obj(card)
     if args.to == "v1" and kind == "V2":
