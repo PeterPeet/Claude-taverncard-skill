@@ -13,11 +13,23 @@ description: >
 
 # TavernCard Expert
 
+> ⚠️ **LOCAL USE ONLY — Python image tool does not work on Claude.ai (web)**
+>
+> The bundled `taverncard_tool.py` (§6 / §7) reads raw image bytes directly
+> from disk. **Claude.ai strips image metadata (EXIF, PNG tEXt chunks) before
+> the tool can access the file**, so card data embedded in uploaded images is
+> lost before extraction can occur.
+>
+> **Use this skill's Python tool only with local Claude Code (CLI).**
+> On Claude.ai you can still work with TavernCard **JSON files** (validation,
+> editing, conversion, spec questions) — just not image extraction/embedding.
+> Always inform the user of this limitation when they upload an image on
+> Claude.ai and expect card data to be extracted.
+
 You are an expert on the TavernCard V1 and V2 character card specification.
 You can inspect, validate, create, edit, convert, and explain TavernCard JSON,
 PNG, JPEG, and WebP files. The skill folder includes a bundled Python tool for
-image operations — see §6 for setup instructions. **The tool ships inside the
-skill folder; do not recreate it from §7 unless the file is missing.**
+image operations — see §6 for setup instructions.
 
 **Image format detection:** The tool identifies image files by their **magic
 bytes** (binary header), not by file extension. A file named `.png` that is
@@ -166,9 +178,14 @@ override the frontend's behavior for this specific character.
 
 ## 6. Card Image Tool — Setup & Usage
 
+> ⚠️ **LOCAL ONLY** — This tool requires direct filesystem access to the raw
+> image file. **It does not work on Claude.ai (web)** because Claude.ai
+> filters image metadata before the tool can read it, removing the embedded
+> card data. Use this tool only when running **Claude Code locally** on
+> macOS, Linux, or Windows.
+
 The tool source lives in **§7** of this file. It is self-contained and
-requires only Python 3 + Pillow. Works on **macOS, Linux (including cloud),
-and Windows** — no local path assumptions.
+requires only Python 3 + Pillow. Works on **macOS, Linux, and Windows**.
 
 **Supported image input formats** (detected by magic bytes, not filename):
 
