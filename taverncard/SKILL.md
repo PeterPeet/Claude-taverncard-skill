@@ -16,7 +16,8 @@ description: >
 You are an expert on the TavernCard V1 and V2 character card specification.
 You can inspect, validate, create, edit, convert, and explain TavernCard JSON,
 PNG, JPEG, and WebP files. The skill folder includes a bundled Python tool for
-image operations — see §6 for bootstrap instructions.
+image operations — see §6 for setup instructions. **The tool ships inside the
+skill folder; do not recreate it from §7 unless the file is missing.**
 
 **Image format detection:** The tool identifies image files by their **magic
 bytes** (binary header), not by file extension. A file named `.png` that is
@@ -179,32 +180,44 @@ self-contained and requires only Python 3 + Pillow.
 **Output images are always PNG** — the standard TavernCard container.
 Artwork for `--bg` / `--image` accepts PNG, JPEG, or WebP.
 
-### Platform notes
+### Step 1 — Find the tool (it is already here)
 
-| OS | Python command | Set TOOL variable |
-|---|---|---|
-| macOS / Linux | `python3` | `TOOL=~/.claude/skills/taverncard/taverncard_tool.py` |
-| Windows (PowerShell) | `python` | `$TOOL = "$HOME\.claude\skills\taverncard\taverncard_tool.py"` |
+**The tool ships inside the skill folder — no bootstrap required.**
 
-### Step 1 — Locate or bootstrap the tool
+When this skill loads, Claude receives:
+> `Base directory for this skill: <SKILL_BASE_DIR>`
 
-The tool is at: `~/.claude/skills/taverncard/taverncard_tool.py`
-
-Check it exists (cross-platform):
+The tool is always present at:
 ```
-python3 -c "import os; p=os.path.expanduser('~/.claude/skills/taverncard/taverncard_tool.py'); print('OK' if os.path.exists(p) else 'MISSING')"
+<SKILL_BASE_DIR>/taverncard_tool.py
 ```
 
-If **MISSING**, write it from the source in §7, then install Pillow:
+**Set the TOOL variable to that path before running any command.** Use the
+exact base directory path that was shown in the skill-loading header.
+
+```bash
+# macOS / Linux  (replace <SKILL_BASE_DIR> with the actual path)
+TOOL="<SKILL_BASE_DIR>/taverncard_tool.py"
+python3 "$TOOL" --help          # quick sanity check
+
+# Windows PowerShell
+$TOOL = "<SKILL_BASE_DIR>\taverncard_tool.py"
+python "$TOOL" --help
 ```
-pip install Pillow -q
+
+Verify Pillow is installed (required once per Python environment):
 ```
+python3 -c "import PIL; print('Pillow OK')" || pip install Pillow -q
+```
+
+> **If the file is somehow missing** (should not happen), write the source
+> from §7 to `<SKILL_BASE_DIR>/taverncard_tool.py` and run
+> `pip install Pillow -q`.
 
 ### Step 2 — Run commands
 
-Set `TOOL` (see Platform notes above), then use `python3` (macOS/Linux) or
-`python` (Windows). The variable syntax `$TOOL` works in both bash and
-PowerShell once the variable is set.
+Use `python3` (macOS / Linux) or `python` (Windows). `$TOOL` must already be
+set as described above.
 
 ```bash
 # Inspect any image (PNG, JPEG, WebP) or JSON — reports actual detected format
@@ -252,8 +265,10 @@ Full flag reference: `references/tool_cli.md`
 
 ## 7. Tool Source (Bootstrap)
 
-If `~/.claude/skills/taverncard/taverncard_tool.py` is missing, write this
-source to that path verbatim, then run `pip install Pillow -q`.
+The tool normally ships inside the skill folder and **does not need to be
+recreated**. If it is somehow missing, write this source verbatim to
+`<SKILL_BASE_DIR>/taverncard_tool.py` (the skill's own base directory — see
+§6), then run `pip install Pillow -q`.
 
 ```python
 #!/usr/bin/env python3
