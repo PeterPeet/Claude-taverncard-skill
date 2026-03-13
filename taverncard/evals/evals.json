@@ -75,6 +75,34 @@
         "Provides the embed command with --bg for the new artwork",
         "Uses the correct tool path ~/.claude/skills/taverncard/taverncard_tool.py"
       ]
+    },
+    {
+      "id": 6,
+      "name": "JPEG/WebP format detection and handling",
+      "prompt": "A user has a file called 'character.png' but they suspect it might actually be a JPEG or WebP internally. They want to: 1) check what the file really is, 2) extract the card JSON from it. Explain how the tool handles misnamed files and give them the exact commands, using the bundled taverncard_tool.py.",
+      "expected_output": "Explains that the tool detects image format by magic bytes (binary header), not file extension, so a .png file that is actually JPEG or WebP is handled correctly. Provides the info command showing it will report the real detected type, and the extract command with -o to get the JSON.",
+      "files": [],
+      "expectations": [
+        "Explains that format detection uses magic bytes (binary header), not file extension",
+        "Mentions support for PNG, JPEG, and WebP as input formats",
+        "Provides the info command to inspect and confirm the actual file type",
+        "Provides the extract command with -o flag to extract the card JSON",
+        "Uses the correct tool path ~/.claude/skills/taverncard/taverncard_tool.py"
+      ]
+    },
+    {
+      "id": 7,
+      "name": "swap-image with JPEG artwork",
+      "prompt": "A user has a TavernCard PNG at ~/cards/hero.png and wants to swap its artwork with a JPEG photo at ~/photos/new_art.jpg, keeping the card JSON intact. Give them the exact command using taverncard_tool.py.",
+      "expected_output": "Provides the swap-image command using --card (or --card-png) pointing to hero.png and --image (or --image-png) pointing to new_art.jpg, with -o specifying the output PNG. Notes that artwork input accepts PNG, JPEG, or WebP.",
+      "files": [],
+      "expectations": [
+        "Provides the swap-image subcommand",
+        "Uses --card or --card-png for the source card",
+        "Uses --image or --image-png for the JPEG artwork",
+        "Specifies an output PNG with -o",
+        "Uses the correct tool path ~/.claude/skills/taverncard/taverncard_tool.py"
+      ]
     }
   ]
 }
