@@ -1,0 +1,80 @@
+{
+  "skill_name": "taverncard",
+  "evals": [
+    {
+      "id": 1,
+      "name": "Validate V2 card with common issues",
+      "prompt": "Please inspect and validate this TavernCard JSON file:\nevals/files/test_card_v2_issues.json\n\nIdentify the card version, check all fields against the spec, and list every issue you find with recommended fixes.",
+      "expected_output": "Correctly identifies V2 format, flags the empty personality field, flags system_prompt and post_history_instructions as empty strings that should be {{original}}, flags character_version as '1.0' instead of '1.0.0', names the character Mira Solvane",
+      "files": [
+        "evals/files/test_card_v2_issues.json"
+      ],
+      "expectations": [
+        "Correctly identifies the card as V2 format (chara_card_v2)",
+        "Flags the empty personality field as an issue",
+        "Flags system_prompt and/or post_history_instructions as empty strings and recommends {{original}}",
+        "Character name 'Mira Solvane' is identified"
+      ]
+    },
+    {
+      "id": 2,
+      "name": "Identify V1 card with spec violations",
+      "prompt": "Inspect this TavernCard JSON and tell me: what version is it, what spec violations exist, and what should be done to bring it up to V2?\n\nevals/files/test_card_v1_problematic.json",
+      "expected_output": "Identifies as V1 (despite metadata block), flags empty description/personality/scenario, flags mes_example being misused as a system prompt, explains how to upgrade to V2",
+      "files": [
+        "evals/files/test_card_v1_problematic.json"
+      ],
+      "expectations": [
+        "Correctly identifies the card as V1 (not V2 — the metadata block is not a spec indicator)",
+        "Flags that description, personality, and/or scenario are empty",
+        "Identifies mes_example as misused (contains Alpaca-style system prompt, not example dialogues)",
+        "Describes how to upgrade the card to V2 or what changes are needed"
+      ]
+    },
+    {
+      "id": 3,
+      "name": "Compare two versions of the same card",
+      "prompt": "I have two JSON files for the same character downloaded from different sources. Compare them and explain what's different and which is more complete.\n\nFile A (older): evals/files/test_card_v2_old_snapshot.json\nFile B (newer): evals/files/test_card_v2_updated.json",
+      "expected_output": "Identifies both as Torak Emberveil, finds that File B has a character_book/lorebook absent in File A, notes the description was condensed in B (world-building moved to lorebook), notes File B has an alternate greeting, concludes File B is more complete",
+      "files": [
+        "evals/files/test_card_v2_old_snapshot.json",
+        "evals/files/test_card_v2_updated.json"
+      ],
+      "expectations": [
+        "Character name 'Torak Emberveil' is identified from both files",
+        "Identifies that one version has a character_book (lorebook) and the other does not",
+        "Notes the difference in description length / content between the two versions",
+        "Correctly determines which version is more complete and why"
+      ]
+    },
+    {
+      "id": 4,
+      "name": "Edit and fix a V2 card",
+      "prompt": "Fix the issues in this TavernCard V2 JSON and output a corrected, complete version:\n\nevals/files/test_card_v2_issues.json\n\nFixes needed:\n1. Fill in the personality field with an appropriate short summary based on the description\n2. Set system_prompt and post_history_instructions to their correct spec defaults\n3. Fix character_version to the conventional format",
+      "expected_output": "Outputs corrected V2 JSON with personality filled from description content using {{char}}, system_prompt set to {{original}}, post_history_instructions set to {{original}}, character_version set to 1.0.0, all other fields unchanged",
+      "files": [
+        "evals/files/test_card_v2_issues.json"
+      ],
+      "expectations": [
+        "Output contains valid V2 JSON structure (spec: chara_card_v2, spec_version: 2.0)",
+        "personality field is filled with non-empty content derived from the description",
+        "system_prompt is set to '{{original}}' in the output",
+        "post_history_instructions is set to '{{original}}' in the output",
+        "Character name 'Mira Solvane' is preserved and no other content fields are altered"
+      ]
+    },
+    {
+      "id": 5,
+      "name": "PNG workflow guidance",
+      "prompt": "A user has a TavernCard PNG file at /home/user/cards/my_character.png and wants to: 1) inspect it, 2) extract the JSON, 3) edit the JSON, then 4) re-embed it into a new PNG using new artwork at /home/user/art/new_art.png. Give them the exact sequence of commands to do this using the bundled taverncard_tool.py.",
+      "expected_output": "Provides a clear 4-step sequence using the correct taverncard_tool.py commands: info, extract with -o flag, (edit step noted), then embed with --bg flag. Uses ~/.claude/skills/taverncard/taverncard_tool.py as the tool path.",
+      "files": [],
+      "expectations": [
+        "Provides the info command to inspect the PNG first",
+        "Provides the extract command with the correct -o output flag",
+        "Provides the embed command with --bg for the new artwork",
+        "Uses the correct tool path ~/.claude/skills/taverncard/taverncard_tool.py"
+      ]
+    }
+  ]
+}
